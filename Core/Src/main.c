@@ -22,6 +22,14 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include <stdio.h>
+#include <string.h>
+#include "ring_buffer.h"
+#include "ssd1306_conf.h"
+#include "ssd1306.h"
+#include "ssd1306_fonts.h"
+
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,7 +53,10 @@ I2C_HandleTypeDef hi2c1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+ring_buffer_t ring_buffer_uart_rx;
+uint8_t rx_buffer[16];
+uint8_t rx_data;
+uint8_t cont = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -60,6 +71,21 @@ static void MX_I2C1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+int _write(int file, char *ptr, int len)
+{
+  HAL_UART_Transmit(&huart2, (uint8_t *)ptr, len, HAL_MAX_DELAY);
+  return len;
+}
+/**
+  * @brief  Rx Transfer completed callback.
+  * @param  huart UART handle.
+  * @retval None
+  */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	printf("codigo: %s\r\n",rx_data); //se guarda la variable con la contraseña digitada
+	HAL_UART_Receive_IT(&huart2, &rx_data, 2);
+}
 /* USER CODE END 0 */
 
 /**
@@ -92,7 +118,27 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_I2C1_Init();
+
+  // Inicializar la pantalla SSD
+  ssd1306_Init();
+
+  // Poner toda la pantalla en negro
+  ssd1306_Fill(Black);
+
+  // establecer el cursor en las coordenas (20,20) || La pantalla es de (100x100)
+  ssd1306_SetCursor(20, 20);
+
   /* USER CODE BEGIN 2 */
+  ring_buffer_init(&ring_buffer_uart_rx, rx_buffer, 16);
+
+//se inicializa la pantalla
+  ssd1306_Init();
+  ssd1306_Fill(Black);
+  ssd1306_SetCursor(20, 20);
+  ssd1306_WriteString("waiting", Font_7x10, White);
+  ssd1306_UpdateScreen();
+
+  HAL_UART_Receive_IT(&huart2, rx_data, 2);
 
   /* USER CODE END 2 */
 
@@ -100,6 +146,31 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  uint32_t contraseña = 817560; //contraseña guardada
+
+	  //primera comparacion con la contraseña
+	  if (rx_data == contraseña) {
+		  ssd1306_Fill(Black);
+		  ssd1306_SetCursor(20, 20);
+		  ssd1306_WriteString("success", Font_7x10, White);
+		  ssd1306_UpdateScreen();
+		  cont = 0;
+	  }else {
+		  cont = cont+1;
+		  ssd1306_Fill(Black);
+		  ssd1306_SetCursor(20, 20);
+		  ssd1306_WriteString("fail", Font_7x10, White);
+		  ssd1306_UpdateScreen();
+		  if (cont==3){
+			  cont = 0;
+			  ssd1306_Fill(Black);
+			  ssd1306_SetCursor(20, 20);
+			  ssd1306_WriteString("blocked", Font_7x10, White);
+			  ssd1306_UpdateScreen();
+			  HAL_Delay(30000);
+		  }
+	  }
+	  HAL_Delay(1000); // to wait one second
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
